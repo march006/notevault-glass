@@ -1,0 +1,4 @@
+-r needs.txt
+bandit==1.8.6
+pip-audit==2.9.0
+cyclonedx-bom==5.0.0

@@ -1,0 +1,62 @@
+name: security
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scans:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -r project/starter-app/requirements-dev.txt
+      - name: SAST (Bandit)
+        run: bandit -r project/starter-app/app.py -ll
+      - name: SCA (pip-audit)
+        run: pip-audit -r project/starter-app/needs.txt --strict
+      - name: Secret scan (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  supply-chain:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: scans
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install cyclonedx-bom==5.0.0 -r project/starter-app/needs.txt
+      - name: Create CycloneDX SBOM
+        run: cyclonedx-py requirements project/starter-app/needs.txt --output-format JSON --output-file sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with: {name: notevault-sbom, path: sbom.cdx.json}
+      - name: Build image
+        run: docker build -t notevault:${{ github.sha }} project/starter-app
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign image using keyless OIDC
+        env: {COSIGN_EXPERIMENTAL: '1'}
+        run: |
+          docker save notevault:${GITHUB_SHA} -o notevault.tar
+          cosign sign-blob --yes --bundle notevault.tar.bundle notevault.tar
+          cosign attest-blob --yes --predicate sbom.cdx.json --type cyclonedx --bundle sbom.attestation.bundle sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-release-material
+          path: |
+            notevault.tar
+            notevault.tar.bundle
+            sbom.cdx.json
+            sbom.attestation.bundle

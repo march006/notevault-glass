@@ -1,0 +1,48 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:7c2bfc9b-df02-4c76-9a45-2ab606a9f056",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-11-06T07:00:00Z",
+    "component": {
+      "type": "application",
+      "name": "NoteVault",
+      "version": "0.1.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/Flask@3.1.2",
+      "name": "Flask",
+      "version": "3.1.2",
+      "purl": "pkg:pypi/Flask@3.1.2",
+      "scope": "required"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/Werkzeug@3.1.3",
+      "name": "Werkzeug",
+      "version": "3.1.3",
+      "purl": "pkg:pypi/Werkzeug@3.1.3",
+      "scope": "required"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/reportlab@4.4.4",
+      "name": "reportlab",
+      "version": "4.4.4",
+      "purl": "pkg:pypi/reportlab@4.4.4",
+      "scope": "required"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/gunicorn@23.0.0",
+      "name": "gunicorn",
+      "version": "23.0.0",
+      "purl": "pkg:pypi/gunicorn@23.0.0",
+      "scope": "required"
+    }
+  ]
+}

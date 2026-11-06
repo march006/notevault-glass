@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.env
+project/starter-app/instance/
+project/starter-app/*.db
+project/pdf-preview/
+project/rendered/
