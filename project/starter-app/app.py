@@ -1,4 +1,4 @@
-import os, re, secrets, sqlite3, time
+import os, re, secrets, sqlite3, time, hashlib
 from functools import wraps
 from pathlib import Path
 from flask import Flask, abort, flash, g, redirect, render_template, request, send_file, session, url_for
@@ -7,16 +7,17 @@ from werkzeug.security import check_password_hash, generate_password_hash
 BASE = Path(__file__).resolve().parent
 DB = Path(os.environ.get("NOTES_DB", BASE / "instance" / "notes.db"))
 TEAM_ID = os.environ.get("TEAM_ID", "local-team")
+TEAM_MARKER = f"{TEAM_ID}-{hashlib.sha256(TEAM_ID.encode()).hexdigest()[:12]}"
 app = Flask(__name__)
 if not os.environ.get('SECRET_KEY') or not os.environ.get('ADMIN_PASSWORD'):
     raise RuntimeError('Set SECRET_KEY and ADMIN_PASSWORD before starting NoteVault')
 app.config.update(SECRET_KEY=os.environ['SECRET_KEY'], SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "0") == "1", MAX_CONTENT_LENGTH=1_048_576)
 
-SCHEMA = """CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user'); CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES users(id), title TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"""
+SCHEMA = """CREATE TABLE IF NOT EXISTS team_marker (team_id TEXT PRIMARY KEY, marker TEXT NOT NULL); CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'user'); CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY, owner_id INTEGER NOT NULL REFERENCES users(id), title TEXT NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);"""
 def db():
     if "db" not in g:
         DB.parent.mkdir(parents=True, exist_ok=True)
-        g.db=sqlite3.connect(DB); g.db.row_factory=sqlite3.Row; g.db.execute("PRAGMA foreign_keys=ON"); g.db.executescript(SCHEMA); g.db.commit()
+        g.db=sqlite3.connect(DB); g.db.row_factory=sqlite3.Row; g.db.execute("PRAGMA foreign_keys=ON"); g.db.executescript(SCHEMA); g.db.execute("INSERT OR IGNORE INTO team_marker(team_id,marker) VALUES(?,?)", (TEAM_ID, TEAM_MARKER)); g.db.commit()
         if not g.db.execute("SELECT 1 FROM users WHERE username='admin'").fetchone(): g.db.execute("INSERT INTO users(username,password_hash,role) VALUES(?,?,?)", ('admin',generate_password_hash(os.environ['ADMIN_PASSWORD']),'admin')); g.db.commit()
     return g.db
 @app.teardown_appcontext
@@ -48,7 +49,7 @@ def valid_text(value, limit): return isinstance(value,str) and 1 <= len(value.st
 def index():
     if not session.get('uid'): return redirect(url_for('login'))
     notes=db().execute('SELECT id,title,body,created_at FROM notes WHERE owner_id=? ORDER BY id DESC',(session['uid'],)).fetchall()
-    return render_template('index.html', notes=notes, team=TEAM_ID)
+    return render_template('index.html', notes=notes, team=TEAM_ID, marker=TEAM_MARKER)
 @app.route('/register',methods=['GET','POST'])
 def register():
     if request.method=='POST':
@@ -90,7 +91,7 @@ def search():
 @admin_required
 def admin():
     users=db().execute('SELECT id,username,role FROM users ORDER BY id').fetchall()
-    return render_template('admin.html', users=users, count=db().execute('SELECT COUNT(*) FROM notes').fetchone()[0])
+    return render_template('admin.html', users=users, count=db().execute('SELECT COUNT(*) FROM notes').fetchone()[0], marker=TEAM_MARKER)
 @app.get('/export/<int:note_id>')
 @login_required
 def export_note(note_id):

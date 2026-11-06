@@ -1,94 +1,171 @@
 # NoteVault Secure Build Report
 
 ## Cover
-- Team: **GLASS**
-- Members: **[names and roles]**
-- GitHub repository: **https://github.com/march006/notevault-glass**
-- Unlisted demonstration video: **[add YouTube or Drive URL with link access enabled]**
-- Submission date: **6 November 2026, 16:59 ICT**
 
-## Executive summary
-NoteVault is a deliberately scoped Flask notes application. This report describes the assets and trust boundaries, the security findings in the vulnerable baseline, the remediations in the secure build, and reproducible supply-chain controls. Only run attack demonstrations against the local lab instance.
+| Field | Value |
+|---|---|
+| Team name | GLASS |
+| Members (name + ID) | [Fill in all team members] |
+| Target application | NoteVault, Flask + SQLite |
+| Repository URL | https://github.com/march006/notevault-glass |
+| Demo video (unlisted YouTube / Google Drive link) | [Add after recording; grant link access] |
+| Date | 6 November 2026 |
 
-## 1. Threat model
-### Scope and assumptions
-Local web app on port 8080; SQLite persistence; a browser is untrusted; reverse proxy/TLS termination is outside the demo. Users may be malicious. Production secrets and public deployment are out of scope.
-### Data-flow diagram
+## AI-tool usage disclosure
+
+| Tool | How it was used |
+|---|---|
+| ChatGPT / Codex | Generated the initial app scaffold, vulnerable baseline, threat model draft, vulnerability mappings, remediation code, CI workflow, SBOM draft, and report draft. Team members must review, run, adapt, and be prepared to explain every change. |
+
+## 1. Executive Summary
+
+NoteVault is a small Flask note-sharing app. The intentionally vulnerable baseline has eight findings: six High and two Medium. The most serious risks are SQL injection, broken access control, and stored XSS. The remediated build uses parameterized SQL, owner-scoped reads, Jinja escaping, password hashing, CSRF protection, secure session handling, pinned runtime dependencies, and a non-root hardened container. Residual risks include no production rate limiter or audit trail. The CI gate is configured, but no GitHub Actions run has completed yet, so the build and signed release are not verified.
+
+## 2. System Scope & Function
+
+The app supports registration and login, creating and viewing personal notes, searching notes, an administrator user list, and PDF export. In scope are browser-to-Flask requests, cookie sessions, SQLite storage, the PDF export function, Python dependencies, Docker image, and GitHub Actions. The vulnerable baseline is isolated under `project/vulnerable-baseline`; the fixed implementation is `project/starter-app`.
+
+### Data-Flow Diagram
+
 ```mermaid
 flowchart LR
- B[Browser: untrusted] -->|HTTPS request, cookie, form| W[Flask web app]
- W -->|parameterized SQL| D[(SQLite notes and password hashes)]
- W -->|PDF export| E[ReportLab in process]
- W -->|HTML response, Jinja autoescape| B
- A[Admin browser] -->|authenticated request| W
- subgraph TB1[Trust boundary: network / browser to app]
+ B[Browser: user/admin] -->|HTTPS request, cookie, form| W[Flask web app]
+ W -->|parameterized SQL| D[(SQLite: users, notes, team marker)]
+ W -->|PDF export| E[ReportLab]
+ W -->|Jinja autoescaped HTML| B
+ subgraph TB1[Trust boundary: client to application]
  B
  end
- subgraph TB2[Trust boundary: app process to persistent storage]
+ subgraph TB2[Trust boundary: application to persistent data]
  W
  D
+ E
  end
 ```
-### STRIDE analysis
-| Threat | Component / boundary | Example | Control |
+
+`TEAM_ID=GLASS` seeds a deterministic traceability marker in the `team_marker` table and displays it in the app. The marker is evidence for this team build, not a credential.
+
+## 3. Threat Model — STRIDE
+
+| Element / data flow | S | T | R | I | D | E | Top threat & mitigation |
+|---|---|---|---|---|---|---|---|
+| Browser ↔ Flask session and forms | Credential/session spoofing | Forged note or login request | User disputes note change | Cookie or note disclosure | Request flooding | Role escalation | Hash passwords, rotate session, HttpOnly/SameSite/Secure, CSRF tokens, role gate, bounded input |
+| Flask ↔ SQLite | N/A | SQL injection or unauthorized update | No audit trail | Cross-user note read | Expensive query | Database role abuse | Parameterized SQL, owner_id in every note query, bounded search, add audit trail before production |
+| Flask → PDF export | N/A | Malformed export input | No export audit | Another user's note exported | Large export | N/A | Owner-scoped note lookup and request-size limits |
+| Build workflow → artifact | Compromised action/dependency | Tampered build or SBOM | Weak provenance | Secret leakage | Resource exhaustion | Artifact substitution | Scan dependencies, secret scan, short-lived OIDC signing, retain workflow identity and commit SHA |
+
+### Top 5 risks ranked by likelihood × impact
+
+| Rank | Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|---|
+| 1 | SQL injection in baseline search | High | High | Parameterized query; SAST/SCA gate |
+| 2 | IDOR / missing authorization on note and export | High | High | Owner-scoped access checks and admin decorator |
+| 3 | Stored XSS in note display | Medium | High | Template autoescaping; no raw HTML rendering |
+| 4 | Plaintext credentials and fixed session signing key | Medium | High | Strong password hashes; required random secret; rotate session |
+| 5 | Vulnerable dependencies and root container | Medium | High | Pinned direct dependencies, audit gate, non-root container, SBOM and signing |
+
+## 4. Vulnerability Findings
+
+Severity is qualitative for the local teaching app. Reproduce only against the deliberately vulnerable local baseline with dummy data.
+
+### Finding F-01 — SQL injection in search
+
+- **CWE:** CWE-89. **OWASP 2025:** A05 Injection. **Severity:** High.
+- **Location:** `project/vulnerable-baseline/app.py`, `/search`.
+- **Reproduction:** Start the baseline and request `/search?q=%25%27%20OR%201%3D1%20--%20`. The formatted SQL changes its predicate.
+- **Impact:** Search may return records outside the intended query.
+- **Evidence:** Source line builds SQL using string formatting; preserve a local request/response screenshot when you record the demo.
+
+### Finding F-02 — Broken access control / IDOR
+
+- **CWE:** CWE-639. **OWASP 2025:** A01 Broken Access Control. **Severity:** High.
+- **Location:** Baseline `/export/<id>` and `/note/<id>`.
+- **Reproduction:** Request `/export/1` without a session, then change the numeric ID to another seeded note.
+- **Impact:** Unauthorized note disclosure.
+- **Evidence:** Baseline handlers load by id without owner verification; capture the response locally.
+
+### Finding F-03 — Stored cross-site scripting
+
+- **CWE:** CWE-79. **OWASP 2025:** A05 Injection. **Severity:** High.
+- **Location:** Baseline `/note` and `/note/<id>`.
+- **Reproduction:** Sign in to the local baseline, POST title `Demo` and body `<img src=x onerror=alert(1)>` to `/note`, then open the saved note.
+- **Impact:** Script executes in a viewer's browser origin.
+- **Evidence:** Baseline passes stored title/body into `render_template_string` as HTML; capture browser behavior.
+
+### Finding F-04 — Plaintext passwords and known demo admin credential
+
+- **CWE:** CWE-256, CWE-521. **OWASP 2025:** A04 Cryptographic Failures and A07 Authentication Failures. **Severity:** High.
+- **Location:** Baseline `users` schema and `/login`; seeded account `admin / admin123`.
+- **Reproduction:** Sign in locally using the seeded demo credential or inspect the SQLite `users` table.
+- **Impact:** Password disclosure and administrator account takeover.
+- **Evidence:** Baseline stores the password field directly and embeds a known development password.
+
+### Finding F-05 — CSRF on note creation
+
+- **CWE:** CWE-352. **OWASP 2025:** A01 Broken Access Control. **Severity:** Medium.
+- **Location:** Baseline POST `/note`.
+- **Reproduction:** While signed in, submit a cross-origin form POST to `/note`; the route has no CSRF token.
+- **Impact:** A victim's browser can create an unintended note using the active session.
+- **Evidence:** Baseline form and handler contain no CSRF check; record a local request/response.
+
+### Finding F-06 — Fixed session signing key and weak cookie policy
+
+- **CWE:** CWE-384, CWE-1275. **OWASP 2025:** A07 Authentication Failures and A02 Security Misconfiguration. **Severity:** Medium.
+- **Location:** Baseline Flask initialization and cookie defaults.
+- **Reproduction:** Inspect the hard-coded `app.secret_key='dev-secret'` and cookie response flags.
+- **Impact:** A known signing secret enables session forgery; weak cookie attributes increase theft/fixation risk.
+- **Evidence:** Baseline source shows the fixed key; capture `Set-Cookie` flags for the demo record.
+
+### Finding F-07 — End-of-life dependencies
+
+- **CWE:** CWE-1104. **OWASP 2025:** A03 Software Supply Chain Failures. **Severity:** High.
+- **Location:** `project/vulnerable-baseline/needs-vulnerable.txt` and Python 3.7 baseline image.
+- **Reproduction:** In a disposable environment run `pip-audit -r project/vulnerable-baseline/needs-vulnerable.txt` and inspect the old pinned packages.
+- **Impact:** Known vulnerable components can enable compromise.
+- **Evidence:** Obsolete versions are explicitly pinned in the baseline; retain scanner output when available.
+
+### Finding F-08 — Insecure Docker build configuration
+
+- **CWE:** CWE-250, CWE-1104. **OWASP 2025:** A02 Security Misconfiguration and A03 Software Supply Chain Failures. **Severity:** High.
+- **Location:** Baseline Dockerfile.
+- **Reproduction:** Inspect the end-of-life Python base, root user, and broad build context.
+- **Impact:** Known runtime issues and unnecessary container privileges increase compromise impact.
+- **Evidence:** Dockerfile uses Python 3.7 and runs as root.
+
+## 5. Remediation
+
+| Finding | Vulnerable → fixed implementation | Why this fixes it | Commit |
 |---|---|---|---|
-| Spoofing | Login boundary | Credential guessing or stolen cookie | Strong password hashes, secure cookie flags, rotate session at login |
-| Tampering | Forms to app | Cross-site note creation or forged fields | CSRF token, server-side validation |
-| Repudiation | App and audit trail | User denies changing a note | Authenticated owner_id; production audit logging remains recommended |
-| Information disclosure | Notes / export | IDOR exposes another user's note | Owner-scoped queries, admin gate, no secret in source |
-| Denial of service | Request / export | Oversized content or expensive repeated requests | 1 MiB request cap, field bounds; production rate limit still required |
-| Elevation of privilege | User to admin | Role supplied by registration or stale session | Role assigned server-side, decorator authorization |
+| F-01 | String-formatted SQL → parameterized SQLite query | User input stays data, not SQL syntax | `fe38f23` |
+| F-02 | ID-only lookup → owner-scoped note/export query and admin decorator | Each request checks the authenticated owner or role | `fe38f23` |
+| F-03 | Raw HTML concatenation → Jinja autoescaping | HTML metacharacters render as text | `fe38f23` |
+| F-04 | Plaintext/default credential → Werkzeug password hashes; environment-provided admin password | Stored values are one-way hashes; no shipped production password | `fe38f23` |
+| F-05 | No CSRF token → per-session token on all state-changing forms | Cross-site requests lack the valid token | `fe38f23` |
+| F-06 | Fixed signing key → required secret, session rotation, HttpOnly/SameSite and Secure-on-HTTPS | Attackers cannot derive signing key from source; cookie handling improves | `fe38f23` |
+| F-07 | Old pins → maintained pinned direct dependencies, pip-audit gate, CycloneDX SBOM | Known dependency advisories fail the workflow | `db621ff` |
+| F-08 | Root/EOL image → patch-version slim image, non-root UID, read-only FS, dropped capabilities | Reduces known vulnerable base exposure and runtime privilege | `db621ff` |
 
-## 2. Vulnerability report
-Severity uses CVSS-like qualitative ratings for this teaching app; exploitability is local and assumes an authenticated or reachable instance.
-| ID | Finding and severity | Reproduction in vulnerable baseline | CWE | OWASP Top 10:2025 | Impact |
-| F-01 | SQL injection in search — High | Open `/search?q=%25'%20OR%201%3D1%20--%20` in baseline; SQL is assembled with string formatting | CWE-89 | A05 Injection | Reads notes outside the intended search predicate |
-| F-02 | Broken access control / IDOR — High | Change `/export/1` to another user's note id | CWE-639 | A01 Broken Access Control | Unauthorized note disclosure |
-| F-03 | Stored XSS — High | POST an `<img src=x onerror=alert(1)>` title/body to `/note`, then open `/note/1` | CWE-79 | A05 Injection | Script executes in readers' sessions |
-| F-04 | Weak password storage / demo default — High | Inspect SQLite hash/plaintext or log in with seeded admin credentials | CWE-256, CWE-521 | A07 Authentication Failures | Account takeover and administrator compromise |
-| F-05 | CSRF on state changes — Medium | POST `/note` has no CSRF token; submit a forged cross-origin request while logged in | CWE-352 | A01 Broken Access Control | Forged actions using victim's session |
-| F-06 | Session fixation and weak cookie policy — Medium | Inspect static signing key and missing SameSite/Secure flags; session identity is not regenerated after login | CWE-384, CWE-1004 | A07 Authentication Failures | Session theft or fixation |
-| F-07 | Dependency vulnerabilities / obsolete pins — High | `pip-audit -r needs-vulnerable.txt`; review affected transitive dependencies | CWE-1104 | A03 Software Supply Chain Failures | Known public CVEs can enable compromise |
-| F-08 | Insecure container build — High | Inspect baseline Dockerfile for an end-of-life Python base, root user and broad build context | CWE-250, CWE-1104 | A02 Security Misconfiguration | Known runtime flaws and unnecessary container privileges increase impact |
+Attach before/after request screenshots and exact line diffs during the team's local demo; this draft does not fabricate exploit output.
 
-## 3. Remediation mapping
-| Finding | Secure implementation |
-|---|---|
-| F-01 | Parameterized SQLite queries; wildcard input bounded |
-| F-02 | Owner-scoped read/export; admin decorator checks server-side role |
-| F-03 | Jinja autoescaping; no string-built HTML |
-| F-04 | Werkzeug password hashes; registration requires 12+ chars; no default production password |
-| F-05 | Per-session CSRF token on all state-changing forms |
-| F-06 | HttpOnly and SameSite=Lax; session cleared and rotated at login; Secure enabled behind HTTPS |
-| F-07 | Current pinned dependencies, pip-audit failure gate, CycloneDX SBOM |
-| F-08 | Pinned slim base, non-root UID, read-only root FS, dropped capabilities, no-new-privileges, no baked secrets |
+## 6. Supply-Chain Hardening
 
-## 4. Secure build and supply chain
-- SBOM: `sbom.cdx.json` in CycloneDX JSON format generated from `needs.txt`.
-- Container: multi-stage build is unnecessary for this small app; the runtime image uses a non-root account and only copies runtime files.
-- Signing: GitHub Actions requests short-lived Sigstore identity via OIDC; signs the image archive and attests the SBOM. Verify with `cosign verify-blob` and `cosign verify-attestation-blob` using the workflow identity and issuer constraints.
-- Provenance: GitHub workflow run, commit SHA, and artifact bundles are uploaded with the build. Protect `main` and require successful `scans` before merge.
+- **SBOM:** `project/starter-app/sbom.cdx.json` is CycloneDX 1.6 and currently lists 4 direct runtime components. GitHub Actions regenerates a dependency-resolved SBOM from `needs.txt`; update the component count from that workflow artifact before submission.
+- **Signing:** The workflow uses GitHub OIDC with Cosign to sign the image archive and attest the SBOM. A signed artifact has not yet been produced because no workflow run has completed. Attach the actual `cosign verify-blob` and `cosign verify-attestation-blob` output after a successful run.
+- **SLSA self-assessment:** This build does not claim SLSA conformance yet. CI runs in GitHub Actions and signatures bind artifacts to a short-lived workflow identity, but the workflow does not currently generate a SLSA provenance predicate or meet a hardened builder isolation profile. Add provenance generation and verify builder identity before claiming a SLSA level.
 
-## 5. Security CI
-GitHub Actions runs Bandit (SAST), pip-audit (SCA), and Gitleaks secret scanning on pushes and pull requests. Any Bandit medium/high finding (`-ll`), any pip-audit vulnerability, or detected secret fails the job. Main-branch build creates SBOM, builds and signs artifact material.
+## 7. Security CI Pipeline
 
-## 6. Attack, root cause, fix demonstration
-For each finding: show the vulnerable behavior in the baseline, identify the unsafe data flow or missing authorization check, switch to the secure implementation, replay the same request, and show the denied/escaped/isolated outcome. Do not include real credentials or expose the app publicly.
+Workflow: [`.github/workflows/security.yml`](https://github.com/march006/notevault-glass/blob/main/.github/workflows/security.yml). Bandit runs SAST, pip-audit runs SCA, and Gitleaks scans secrets on push and pull request. Bandit `-ll` fails on medium/high findings; pip-audit fails on reported vulnerabilities; Gitleaks fails on secrets. The supply-chain job builds and signs release material on pushes to `main`.
 
-## 7. Limitations and residual risks
-This classroom app has no production rate limiting, password reset, email verification, audit log, backup encryption, TLS proxy configuration, or formal authorization review. Set `COOKIE_SECURE=1` behind HTTPS, inject random secrets from a secret manager, and review dependency/image scans at release time.
+- **High/critical failure screenshot:** [Add after a controlled CI run; no GitHub Actions run exists yet.]
+- **Successful run and signed artifact:** [Attach Actions run URL and uploaded artifact bundle after it completes.]
 
-## 8. Individual contribution (submit privately)
-| Member | Contribution | Assessment |
-|---|---|---|
-| [Name] | [specific work] | [Full / Most / Some / Little + reason] |
-| [Name] | [specific work] | [Full / Most / Some / Little + reason] |
+## 8. Conclusion & Reflection
 
-## Appendix: run locally
-Set `TEAM_ID` once and retain it. Set strong `SECRET_KEY` and `ADMIN_PASSWORD`, then run `docker compose up --build` from `project/starter-app`. Demo credentials are not published; create a user through registration. This PDF is a starter report; replace bracketed team/repo/video fields and enter truthful contribution statements before submission.
+The fixed build narrows the main trust-boundary risks with parameterized queries, per-object authorization, output escaping, authenticated state changes, and hardened packaging. Residual production work includes TLS proxy deployment settings, rate limits, audit logging, encrypted backups, dependency lock/verification, and a signed provenance attestation. Team members should document what they learned after reproducing the attacks and reviewing the fixes.
 
+## Appendix
 
-## References
-- [OWASP Top 10 2025](https://top10.owasp.org/2025/)
-- [OWASP A01 Broken Access Control](https://top10.owasp.org/2025/A01_2025-Broken_Access_Control/)
-- [OWASP A05 Injection](https://top10.owasp.org/2025/A05_2025-Injection/)
+- **Tools:** Git, Docker Compose, Bandit, pip-audit, Gitleaks, CycloneDX, Cosign. Add versions and actual execution results.
+- **References:** [OWASP Top 10 2025](https://top10.owasp.org/2025/); [CWE](https://cwe.mitre.org/); [Sigstore Cosign](https://docs.sigstore.dev/cosign/).
+- **Task split:** [Fill in each member's actual contribution and private peer assessment; do not invent names or ratings.]
