@@ -27,7 +27,8 @@ jobs:
         run: |
           cat >> project/starter-app/app.py <<'PY'
           import subprocess
-          subprocess.run("true", shell=True)
+          command = request.args.get("cmd", "true")
+          subprocess.run(command, shell=True)
           PY
       - name: SAST (Bandit)
         run: bandit -r project/starter-app/app.py -lll
