@@ -57,7 +57,7 @@ Severity uses CVSS-like qualitative ratings for this teaching app; exploitabilit
 | F-01 | Parameterized SQLite queries; wildcard input bounded |
 | F-02 | Owner-scoped read/export; admin decorator checks server-side role |
 | F-03 | Jinja autoescaping; no string-built HTML |
-| F-04 | Werkzeug PBKDF2 password hashes; registration requires 12+ chars; no default production password |
+| F-04 | Werkzeug password hashes; registration requires 12+ chars; no default production password |
 | F-05 | Per-session CSRF token on all state-changing forms |
 | F-06 | HttpOnly and SameSite=Lax; session cleared and rotated at login; Secure enabled behind HTTPS |
 | F-07 | Current pinned dependencies, pip-audit failure gate, CycloneDX SBOM |
