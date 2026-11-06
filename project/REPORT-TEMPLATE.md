@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Team name | GLASS |
-| Members (name + ID) | [Fill in all team members] |
+| Members (name + ID) | Thiraphat Kongkan (6631503023); Chatmongkhon Jaemjaeng (6631503009) |
 | Target application | NoteVault, Flask + SQLite |
 | Repository URL | https://github.com/march006/notevault-glass |
 | Demo video (unlisted YouTube / Google Drive link) | [Add after recording; grant link access] |
@@ -19,7 +19,7 @@
 
 ## 1. Executive Summary
 
-NoteVault is a small Flask note-sharing app. The intentionally vulnerable baseline has eight findings: six High and two Medium. The most serious risks are SQL injection, broken access control, and stored XSS. The remediated build uses parameterized SQL, owner-scoped reads, Jinja escaping, password hashing, CSRF protection, secure session handling, pinned runtime dependencies, and a non-root hardened container. Residual risks include no production rate limiter or audit trail. The CI gate is configured, but no GitHub Actions run has completed yet, so the build and signed release are not verified.
+NoteVault is a small Flask note-sharing app. The intentionally vulnerable baseline has eight findings: six High and two Medium. The most serious risks are SQL injection, broken access control, and stored XSS. The remediated build uses parameterized SQL, owner-scoped reads, Jinja escaping, password hashing, CSRF protection, secure session handling, pinned runtime dependencies, and a non-root hardened container. GitHub Actions run #5 passed SAST, SCA, secret scanning, image build, CycloneDX SBOM generation, keyless Cosign signing, and verification of the signed image archive and CycloneDX attestation. Residual risks include no production rate limiter, audit trail, or SLSA provenance predicate.
 
 ## 2. System Scope & Function
 
@@ -142,23 +142,23 @@ Severity is qualitative for the local teaching app. Reproduce only against the d
 | F-04 | Plaintext/default credential → Werkzeug password hashes; environment-provided admin password | Stored values are one-way hashes; no shipped production password | `fe38f23` |
 | F-05 | No CSRF token → per-session token on all state-changing forms | Cross-site requests lack the valid token | `fe38f23` |
 | F-06 | Fixed signing key → required secret, session rotation, HttpOnly/SameSite and Secure-on-HTTPS | Attackers cannot derive signing key from source; cookie handling improves | `fe38f23` |
-| F-07 | Old pins → maintained pinned direct dependencies (Flask 3.1.3 and Werkzeug 3.1.9 after the SCA findings), pip-audit gate, CycloneDX SBOM | Known dependency advisories fail the workflow | `db621ff` |
+| F-07 | Old pins → maintained pinned direct dependencies (Flask 3.1.3 and Werkzeug 3.1.9 after the SCA findings), pip-audit gate, CycloneDX SBOM | Known dependency advisories fail the workflow | `b71fcb6` |
 | F-08 | Root/EOL image → patch-version slim image, non-root UID, read-only FS, dropped capabilities | Reduces known vulnerable base exposure and runtime privilege | `db621ff` |
 
 Attach before/after request screenshots and exact line diffs during the team's local demo; this draft does not fabricate exploit output.
 
 ## 6. Supply-Chain Hardening
 
-- **SBOM:** `project/starter-app/sbom.cdx.json` is CycloneDX 1.6 and currently lists 4 direct runtime components. GitHub Actions regenerates a dependency-resolved SBOM from `needs.txt`; update the component count from that workflow artifact before submission.
-- **Signing:** The workflow uses GitHub OIDC with Cosign to sign the image archive and attest the SBOM. A signed artifact has not yet been produced because no workflow run has completed. Attach the actual `cosign verify-blob` and `cosign verify-attestation-blob` output after a successful run.
+- **SBOM:** `project/starter-app/sbom.cdx.json` is a CycloneDX 1.6 document listing the four pinned direct runtime requirements: Flask 3.1.3, Werkzeug 3.1.9, ReportLab 4.4.4, and Gunicorn 23.0.0. Workflow run #4 generated the release SBOM from `needs.txt`; the `notevault-sbom` artifact is published with the run.
+- **Signing and verification:** [Workflow run #5](https://github.com/march006/notevault-glass/actions/runs/42183884518) used GitHub Actions OIDC with Cosign to sign `notevault.tar` and create a CycloneDX attestation for `sbom.cdx.json`. The same step then verified both bundles with the expected identity `https://github.com/march006/notevault-glass/.github/workflows/security.yml@refs/heads/main` and issuer `https://token.actions.githubusercontent.com`; the verification step passed. Rekor transparency-log entries were created (run #4 image blob index 3712304041; run #4 SBOM attestation index 3712304448). The latest bundles are in the `signed-release-material` artifact (about 57 MB); the SBOM is in `notevault-sbom` (about 1.1 KB).
 - **SLSA self-assessment:** This build does not claim SLSA conformance yet. CI runs in GitHub Actions and signatures bind artifacts to a short-lived workflow identity, but the workflow does not currently generate a SLSA provenance predicate or meet a hardened builder isolation profile. Add provenance generation and verify builder identity before claiming a SLSA level.
 
 ## 7. Security CI Pipeline
 
 Workflow: [`.github/workflows/security.yml`](https://github.com/march006/notevault-glass/blob/main/.github/workflows/security.yml). Bandit runs SAST, pip-audit runs SCA, and Gitleaks scans secrets on push and pull request. Bandit `-lll` fails on high findings; pip-audit fails on reported vulnerabilities; Gitleaks fails on secrets. The supply-chain job builds and signs release material on pushes to `main`.
 
-- **High/critical failure screenshot:** [Add after a controlled CI run; no GitHub Actions run exists yet.]
-- **Successful run and signed artifact:** [Attach Actions run URL and uploaded artifact bundle after it completes.]
+- **High/critical failure screenshot:** Not captured yet. Earlier failed runs detected a Bandit gate configuration issue and vulnerable Flask/Werkzeug pins; they were corrected before the passing run. Capture a controlled high-severity gate failure if the instructor requires a screenshot.
+- **Successful run and signed artifact:** [Workflow run #5](https://github.com/march006/notevault-glass/actions/runs/42183884518) passed scans, build, signing, and both Cosign verification commands. It uploaded `notevault-sbom`, `signed-release-material`, and the Gitleaks SARIF report.
 
 ## 8. Conclusion & Reflection
 
@@ -166,7 +166,7 @@ The fixed build narrows the main trust-boundary risks with parameterized queries
 
 ## Appendix
 
-- **Tools:** Git, Docker Compose, Bandit, pip-audit, Gitleaks, CycloneDX, Cosign. Add versions and actual execution results.
+- **Tools:** Git, Docker Compose, Bandit, pip-audit, Gitleaks, CycloneDX, and Cosign. The successful run is linked above; exact tool versions are visible in workflow logs.
 - **References:** [OWASP Top 10 2025](https://top10.owasp.org/2025/); [CWE](https://cwe.mitre.org/); [Sigstore Cosign](https://docs.sigstore.dev/cosign/).
-- **Task split:** [Fill in each member's actual contribution and private peer assessment; do not invent names or ratings.]
+- **Task split:** List each member's actual contribution and submit private peer assessments separately; keep ratings evidence-based.
 
