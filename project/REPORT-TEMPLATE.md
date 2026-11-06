@@ -155,7 +155,7 @@ Attach before/after request screenshots and exact line diffs during the team's l
 
 ## 7. Security CI Pipeline
 
-Workflow: [`.github/workflows/security.yml`](https://github.com/march006/notevault-glass/blob/main/.github/workflows/security.yml). Bandit runs SAST, pip-audit runs SCA, and Gitleaks scans secrets on push and pull request. Bandit `-ll` fails on medium/high findings; pip-audit fails on reported vulnerabilities; Gitleaks fails on secrets. The supply-chain job builds and signs release material on pushes to `main`.
+Workflow: [`.github/workflows/security.yml`](https://github.com/march006/notevault-glass/blob/main/.github/workflows/security.yml). Bandit runs SAST, pip-audit runs SCA, and Gitleaks scans secrets on push and pull request. Bandit `-lll` fails on high findings; pip-audit fails on reported vulnerabilities; Gitleaks fails on secrets. The supply-chain job builds and signs release material on pushes to `main`.
 
 - **High/critical failure screenshot:** [Add after a controlled CI run; no GitHub Actions run exists yet.]
 - **Successful run and signed artifact:** [Attach Actions run URL and uploaded artifact bundle after it completes.]
@@ -169,3 +169,4 @@ The fixed build narrows the main trust-boundary risks with parameterized queries
 - **Tools:** Git, Docker Compose, Bandit, pip-audit, Gitleaks, CycloneDX, Cosign. Add versions and actual execution results.
 - **References:** [OWASP Top 10 2025](https://top10.owasp.org/2025/); [CWE](https://cwe.mitre.org/); [Sigstore Cosign](https://docs.sigstore.dev/cosign/).
 - **Task split:** [Fill in each member's actual contribution and private peer assessment; do not invent names or ratings.]
+

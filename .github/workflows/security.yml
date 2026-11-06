@@ -17,7 +17,7 @@ jobs:
         with: {python-version: '3.12'}
       - run: pip install -r project/starter-app/requirements-dev.txt
       - name: SAST (Bandit)
-        run: bandit -r project/starter-app/app.py -ll
+        run: bandit -r project/starter-app/app.py -lll
       - name: SCA (pip-audit)
         run: pip-audit -r project/starter-app/needs.txt --strict
       - name: Secret scan (Gitleaks)
@@ -60,3 +60,4 @@ jobs:
             notevault.tar.bundle
             sbom.cdx.json
             sbom.attestation.bundle
+
