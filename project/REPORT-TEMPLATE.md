@@ -8,7 +8,7 @@
 | Members (name + ID) | Thiraphat Kongkan (6631503023); Chatmongkhon Jaemjaeng (6631503009) |
 | Target application | NoteVault, Flask + SQLite |
 | Repository URL | https://github.com/march006/notevault-glass |
-| Demo video (unlisted YouTube / Google Drive link) | [Add after recording; grant link access] |
+| Demo video (unlisted YouTube / Google Drive link) | [GLASS NoteVault Secure Build Demo](https://youtu.be/0JQFINv9F8I) |
 | Date | 6 November 2026 |
 
 ## AI-tool usage disclosure
