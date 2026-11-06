@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block body %}<h1>Search notes</h1><form><input name="q" value="{{ q }}" maxlength="100"><button>Search</button></form>{% for n in notes %}<article><h2>{{ n.title }}</h2><p>{{ n.body }}</p></article>{% else %}<p>No matches.</p>{% endfor %}{% endblock %}

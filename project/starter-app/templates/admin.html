@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block body %}<h1>Admin</h1><p>{{ count }} notes</p><ul>{% for u in users %}<li>{{ u.username }} — {{ u.role }}</li>{% endfor %}</ul>{% endblock %}
