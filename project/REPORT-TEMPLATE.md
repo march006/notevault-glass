@@ -168,7 +168,7 @@ The fixed build narrows the main trust-boundary risks with parameterized queries
 
 - **Tools:** Git, Docker Compose, Bandit, pip-audit, Gitleaks, CycloneDX, and Cosign. The successful run is linked above; exact tool versions are visible in workflow logs.
 - **References:** [OWASP Top 10 2025](https://top10.owasp.org/2025/); [CWE](https://cwe.mitre.org/); [Sigstore Cosign](https://docs.sigstore.dev/cosign/).
-- **Task split:** List each member's actual contribution and submit private peer assessments separately; keep ratings evidence-based.
+- **Task split:** Thiraphat Kongkan (6631503023) prepared the threat model (DFD, trust boundaries, and STRIDE), tested the vulnerable starter application, and collected attack evidence. Chatmongkhon Jaemjaeng (6631503009) implemented the code remediations and tracked the related commits, hardened the software supply chain and CI (SBOM, Cosign, SAST, SCA, and secret scanning), and compiled the report and demonstration video. Each member submits their evidence-based peer assessment privately as instructed; peer ratings are not included in this public report.
 
 ### Evidence Appendix
 
