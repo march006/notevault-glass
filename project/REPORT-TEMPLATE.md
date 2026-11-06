@@ -1,9 +1,9 @@
 # NoteVault Secure Build Report
 
 ## Cover
-- Team: **[TEAM_ID]**
+- Team: **GLASS**
 - Members: **[names and roles]**
-- GitHub repository: **[add repository URL]**
+- GitHub repository: **https://github.com/march006/notevault-glass**
 - Unlisted demonstration video: **[add YouTube or Drive URL with link access enabled]**
 - Submission date: **6 November 2026, 16:59 ICT**
 
