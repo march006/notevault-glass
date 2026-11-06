@@ -143,9 +143,9 @@ Severity is qualitative for the local teaching app. Reproduce only against the d
 | F-05 | No CSRF token → per-session token on all state-changing forms | Cross-site requests lack the valid token | `fe38f23` |
 | F-06 | Fixed signing key → required secret, session rotation, HttpOnly/SameSite and Secure-on-HTTPS | Attackers cannot derive signing key from source; cookie handling improves | `fe38f23` |
 | F-07 | Old pins → maintained pinned direct dependencies (Flask 3.1.3 and Werkzeug 3.1.9 after the SCA findings), pip-audit gate, CycloneDX SBOM | Known dependency advisories fail the workflow | `b71fcb6` |
-| F-08 | Root/EOL image → patch-version slim image, non-root UID, read-only FS, dropped capabilities | Reduces known vulnerable base exposure and runtime privilege | `db621ff` |
+| F-08 | Root/EOL image → patch-version slim image, non-root UID, writable app-owned data directory, read-only FS, dropped capabilities | Reduces known vulnerable base exposure and runtime privilege while allowing SQLite persistence | `db621ff`, `295d35d` |
 
-Attach before/after request screenshots and exact line diffs during the team's local demo; this draft does not fabricate exploit output.
+Reproduction evidence and paired screenshots are included in `project/evidence/attack-vs-fix.md` and the Evidence Appendix below. Requests used loopback-only services and synthetic fixture notes; no real data was used.
 
 ## 6. Supply-Chain Hardening
 
@@ -155,10 +155,10 @@ Attach before/after request screenshots and exact line diffs during the team's l
 
 ## 7. Security CI Pipeline
 
-Workflow: [`.github/workflows/security.yml`](https://github.com/march006/notevault-glass/blob/main/.github/workflows/security.yml). Bandit runs SAST, pip-audit runs SCA, and Gitleaks scans secrets on push and pull request. Bandit `-lll` fails on high findings; pip-audit fails on reported vulnerabilities; Gitleaks fails on secrets. The supply-chain job builds and signs release material on pushes to `main`.
+Workflow: [`.github/workflows/security.yml`](https://github.com/march006/notevault-glass/blob/main/.github/workflows/security.yml). Bandit runs SAST, pip-audit runs SCA, and Gitleaks scans secrets on push and pull request. Bandit `-lll` fails on High findings; pip-audit fails on reported vulnerabilities; Gitleaks fails on secrets. The supply-chain job builds and signs release material on pushes to `main`. A manual-only `test_high_severity_gate` input appends an ephemeral Bandit HIGH fixture in the runner checkout to demonstrate that the SAST gate blocks it; the fixture is never committed or built.
 
-- **High/critical failure screenshot:** Not captured yet. Earlier failed runs detected a Bandit gate configuration issue and vulnerable Flask/Werkzeug pins; they were corrected before the passing run. Capture a controlled high-severity gate failure if the instructor requires a screenshot.
-- **Successful run and signed artifact:** [Workflow run #5](https://github.com/march006/notevault-glass/actions/runs/42183884518) passed scans, build, signing, and both Cosign verification commands. It uploaded `notevault-sbom`, `signed-release-material`, and the Gitleaks SARIF report.
+- **High-severity gate proof:** [Workflow run #12](https://github.com/march006/notevault-glass/actions/runs/42187581655) intentionally failed the Bandit SAST step on an ephemeral `subprocess.run(..., shell=True)` fixture (B602, CWE-78, High severity / High confidence). The fixture was added only to the runner checkout by the manual workflow input; it was never committed or built. The supply-chain job was skipped after the scan failure, as intended. The workflow log records the exact finding; the screenshot below captures the failed run summary.
+- **Successful run and signed artifact:** [Workflow run #11](https://github.com/march006/notevault-glass/actions/runs/42187520371) passed the scans, build, signing, and Cosign verification steps for the current main revision. The earlier [run #5](https://github.com/march006/notevault-glass/actions/runs/42183884518) also contains the initial signed artifact and transparency-log evidence.
 
 ## 8. Conclusion & Reflection
 
@@ -169,4 +169,19 @@ The fixed build narrows the main trust-boundary risks with parameterized queries
 - **Tools:** Git, Docker Compose, Bandit, pip-audit, Gitleaks, CycloneDX, and Cosign. The successful run is linked above; exact tool versions are visible in workflow logs.
 - **References:** [OWASP Top 10 2025](https://top10.owasp.org/2025/); [CWE](https://cwe.mitre.org/); [Sigstore Cosign](https://docs.sigstore.dev/cosign/).
 - **Task split:** List each member's actual contribution and submit private peer assessments separately; keep ratings evidence-based.
+
+### Evidence Appendix
+
+The vulnerable fixture was seeded in a temporary local SQLite database with synthetic records `GLASS-SENTINEL` and `XSS-PROOF` owned by the seeded administrator. Requests were sent to `127.0.0.1:8081`; the remediated Docker app was tested at `localhost:8080`. The secure image now gives `/data` to UID 10001; the registration/login/note flow was re-tested after fixing a volume permission regression.
+
+| Finding | Observed baseline result | Remediated result |
+|---|---|---|
+| F-01 SQL injection | `q=NOTFOUND` returned no rows; `q=zz' OR 1=1 -- ` returned both seeded titles. | Parameterized, owner-scoped search did not return the other user's sentinel. |
+| F-02 IDOR / export | Unauthenticated `GET /export/1` returned HTTP 200 and `PRIVATE-NOTE-PROOF`. | Cross-owner export returned HTTP 404. |
+| F-03 Stored XSS | `/note/2` rendered the stored `<b>GLASS-XSS-PROOF</b>` as markup. | Authenticated secure response escaped it to `&lt;b&gt;GLASS-XSS-PROOF&lt;/b&gt;` and displayed it as text. |
+| F-05 CSRF / role check | Baseline note form has no CSRF token; the admin route trusts the session role signed with the fixed key. | Missing CSRF token returned HTTP 400; a normal user received HTTP 403 from `/admin`. |
+
+![GitHub Actions run 12 failed at the security scan gate](project/evidence/high-gate-failure.png)
+
+Detailed requests, responses, and the isolated-fixture note are in [`evidence/attack-vs-fix.md`](evidence/attack-vs-fix.md). The Actions screenshot shows the expected failure at the scan job; run #12's Bandit log identifies B602 / CWE-78 at High severity. Run #11 confirms the current revision passes the normal security and release workflow.
 
