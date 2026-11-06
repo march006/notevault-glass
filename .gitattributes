@@ -1,0 +1,5 @@
+*.pdf -text
+*.docx -text
+*.png -text
+*.jpg -text
+*.zip -text
