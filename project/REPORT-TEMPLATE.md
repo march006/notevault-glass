@@ -142,7 +142,7 @@ Severity is qualitative for the local teaching app. Reproduce only against the d
 | F-04 | Plaintext/default credential → Werkzeug password hashes; environment-provided admin password | Stored values are one-way hashes; no shipped production password | `fe38f23` |
 | F-05 | No CSRF token → per-session token on all state-changing forms | Cross-site requests lack the valid token | `fe38f23` |
 | F-06 | Fixed signing key → required secret, session rotation, HttpOnly/SameSite and Secure-on-HTTPS | Attackers cannot derive signing key from source; cookie handling improves | `fe38f23` |
-| F-07 | Old pins → maintained pinned direct dependencies, pip-audit gate, CycloneDX SBOM | Known dependency advisories fail the workflow | `db621ff` |
+| F-07 | Old pins → maintained pinned direct dependencies (Flask 3.1.3 and Werkzeug 3.1.9 after the SCA findings), pip-audit gate, CycloneDX SBOM | Known dependency advisories fail the workflow | `db621ff` |
 | F-08 | Root/EOL image → patch-version slim image, non-root UID, read-only FS, dropped capabilities | Reduces known vulnerable base exposure and runtime privilege | `db621ff` |
 
 Attach before/after request screenshots and exact line diffs during the team's local demo; this draft does not fabricate exploit output.
