@@ -52,6 +52,8 @@ jobs:
           docker save notevault:${GITHUB_SHA} -o notevault.tar
           cosign sign-blob --yes --bundle notevault.tar.bundle notevault.tar
           cosign attest-blob --yes --predicate sbom.cdx.json --type cyclonedx --bundle sbom.attestation.bundle sbom.cdx.json
+          cosign verify-blob notevault.tar --bundle notevault.tar.bundle --certificate-identity "https://github.com/march006/notevault-glass/.github/workflows/security.yml@refs/heads/main" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
+          cosign verify-blob-attestation sbom.cdx.json --bundle sbom.attestation.bundle --type cyclonedx --check-claims=true --certificate-identity "https://github.com/march006/notevault-glass/.github/workflows/security.yml@refs/heads/main" --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
       - uses: actions/upload-artifact@v4
         with:
           name: signed-release-material
