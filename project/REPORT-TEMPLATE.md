@@ -47,9 +47,9 @@ Severity uses CVSS-like qualitative ratings for this teaching app; exploitabilit
 | F-03 | Stored XSS — High | POST an `<img src=x onerror=alert(1)>` title/body to `/note`, then open `/note/1` | CWE-79 | A05 Injection | Script executes in readers' sessions |
 | F-04 | Weak password storage / demo default — High | Inspect SQLite hash/plaintext or log in with seeded admin credentials | CWE-256, CWE-521 | A07 Authentication Failures | Account takeover and administrator compromise |
 | F-05 | CSRF on state changes — Medium | POST `/note` has no CSRF token; submit a forged cross-origin request while logged in | CWE-352 | A01 Broken Access Control | Forged actions using victim's session |
-| F-06 | Session fixation and weak cookie policy — Medium | Reuse pre-auth cookie after login; inspect missing HttpOnly/SameSite/Secure attributes | CWE-384, CWE-1004 | A07 Authentication Failures | Session theft or fixation |
+| F-06 | Session fixation and weak cookie policy — Medium | Inspect static signing key and missing SameSite/Secure flags; session identity is not regenerated after login | CWE-384, CWE-1004 | A07 Authentication Failures | Session theft or fixation |
 | F-07 | Dependency vulnerabilities / obsolete pins — High | `pip-audit -r needs-vulnerable.txt`; review affected transitive dependencies | CWE-1104 | A03 Software Supply Chain Failures | Known public CVEs can enable compromise |
-| F-08 | Insecure container build — High | Inspect baseline Dockerfile for root user, unpinned base, build secrets, broad context | CWE-250, CWE-522 | A02 Security Misconfiguration | Container escape impact increases; credentials may leak |
+| F-08 | Insecure container build — High | Inspect baseline Dockerfile for an end-of-life Python base, root user and broad build context | CWE-250, CWE-1104 | A02 Security Misconfiguration | Known runtime flaws and unnecessary container privileges increase impact |
 
 ## 3. Remediation mapping
 | Finding | Secure implementation |

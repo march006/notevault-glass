@@ -5,3 +5,14 @@ project/starter-app/instance/
 project/starter-app/*.db
 project/pdf-preview/
 project/rendered/
+
+create_project.py
+final_changes.py
+finalize_project.py
+make_pdf.py
+make_report.py
+patch_project.py
+repair_makepdf.py
+update_refs.py
+cleanup.py
+project/NoteVault-Secure-Build-Report.docx

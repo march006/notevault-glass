@@ -18,10 +18,11 @@ def search():
  q=request.args.get('q',''); rows=conn().execute("SELECT * FROM notes WHERE title LIKE '%%%s%%'"%q).fetchall(); return '<br>'.join(x['title'] for x in rows)
 @app.route('/note',methods=['GET','POST'])
 def create_note():
+ if not session.get('uid'): return 'login required',401
  if request.method=='POST':
-  owner=request.form.get('owner_id','1'); title=request.form.get('title',''); body=request.form.get('body','')
+  owner=session['uid']; title=request.form.get('title',''); body=request.form.get('body','')
   conn().execute("INSERT INTO notes(owner_id,title,body) VALUES(%s,'%s','%s')"%(owner,title,body)); conn().commit(); return 'saved'
- return '<form method=post><input name=owner_id><input name=title><textarea name=body></textarea></form>'
+ return '<form method=post><input name=title><textarea name=body></textarea></form>'
 @app.get('/note/<int:nid>')
 def note(nid):
  row=conn().execute('SELECT * FROM notes WHERE id=?',(nid,)).fetchone()
